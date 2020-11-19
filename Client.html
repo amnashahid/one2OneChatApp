@@ -1,0 +1,130 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <link rel="stylesheet" href="css/site.css" />
+    <script src="lib/jquery/dist/jquery.min.js"></script>
+    <script type="text/javascript" src="lib/signalr/signalr.js"></script>
+</head>
+<body>
+    <div class="container-fluid" id="divLoginArea">
+        <div class="row mt-5 form-group">
+
+            <div class="col-3">
+            </div>
+            <div class="col-1 text-right">
+                User Name
+            </div>
+            <div class="col-3"><input type="text" class="form-control" id="txtUserName" /></div>
+            <div class="col-1"><button class="btn btn-warning" id="btnLogin">Start Chatting</button></div>
+
+        </div>
+    </div>
+    <div class="container-fluid" style="display:none; width:auto;" id="divChatArea">
+        <div class="row">
+            <div class="col-9 text-sm-center">
+                <h3>This is Client Chat </h3>
+            </div>
+            <div class="col-3 text-sm-right">
+                <span id="txtLoginName"> </span>
+            </div>
+        </div><div class="row">
+            <div class="col-3">
+                <div class="card" style="width: 18rem;max-height: 100vh; overflow:auto">
+                    <ul class="list-group list-group-flush" id="divUserList">
+                    </ul>
+                </div>
+            </div>
+            <div class="col-9">
+                <div class="row">
+                    <div class="col-12 message" id="txtChatBox">
+
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12 form-group">
+                        <input type="text" class="form-control" id="txtChat" /><button class="btn btn-primary" onclick="SendChat()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+    <script type="text/javascript">
+        var thisClientId;
+        var thisClient = null;
+        var thatClient = null;
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("https://localhost:44307/chat")
+            .build();
+        connection.start().catch(err => console.error(err.toString()));
+        connection.on("GetClientId", (id) => {
+            thisClientId = id;
+        });
+        connection.on("AddNewUserToAll", UpdateList);
+        connection.on("ShowChatHistory", ShowChatHistory);
+        $("#btnLogin").on("click",
+            function () {
+                if ($("#txtUserName").val() !== "") {
+                    connection.invoke('StartChat', thisClientId, $("#txtUserName").val());
+                    $("#divLoginArea").hide();
+                    $("#divChatArea").show();
+                    $("#txtLoginName").text("Logged in as " + $("#txtUserName").val());
+                    thisClient = $("#txtUserName").val();
+                }
+                else
+                    alert("UserName Needed");
+            });
+        function UpdateList(list) {
+            $("#divUserList").html('');
+            list.forEach((item) => {
+                if (item.id !== thisClientId)
+                    $("#divUserList").append("<li class='list-group-item'>" + item.userName + "</li>");
+            });
+        }
+        $("ul").on("click", "li", ChangeChat);
+        function ChangeChat() {
+            if (thatClient != $(this).text()) {
+                thatClient = $(this).text();
+                connection.invoke("GetChatHistory", thisClientId, thisClient, thatClient);
+            }
+        }
+        function ShowChatHistory(hist) {
+            $("#txtChatBox").html('');
+            hist.forEach((item) => {
+                UpdateChatBox(item);
+            });
+
+        }
+        function SendChat() {
+            if (thatClient == null)
+                alert ("Select a user  to start chat")
+            if ($("#txtChat").val() != "" && thatClient != null)
+                connection.invoke("SendChat", thisClient, thatClient, $("#txtChat").val());
+        }
+
+
+        connection.on("UpdateChatBox", UpdateChatBox);
+        function UpdateChatBox(chat) {
+            let cc = "<div class='messages yours'><div class=' message '>" + chat.msg + "</div></div>";
+            if (chat.from.userName == thisClient)
+                cc = "<div class='messages mine'><div class='message '>" + chat.msg + "</div></div>";
+            $("#txtChatBox").append(cc);
+            $("#txtChat").val("");
+        }
+        connection.on("ThisUserIsMyThatUser", ThisUserIsMyThatUser);
+        function ThisUserIsMyThatUser(thisUserThere,chat) {
+            if (thatClient == thisUserThere)
+                UpdateChatBox(chat);
+        }
+
+    </script>
+</body>
+</html>
